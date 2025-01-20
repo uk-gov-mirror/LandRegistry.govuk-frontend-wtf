@@ -1,5 +1,8 @@
+from typing import Any, Dict
+
 from flask import render_template
 from markupsafe import Markup
+from wtforms import Field  # Import for type hinting
 
 from govuk_frontend_wtf.main import merger
 
@@ -14,16 +17,18 @@ class GovFormBase(object):
     specific use cases
     """
 
-    def __call__(self, field, **kwargs):
+    template: str
+
+    def __call__(self, field: Field, **kwargs: Any) -> Markup:
         return self.render(self.map_gov_params(field, **kwargs))
 
-    def map_gov_params(self, field, **kwargs):
+    def map_gov_params(self, field: Field, **kwargs: Any) -> Dict[str, Any]:
         """Map WTForms' html params to govuk macros
 
         Taking WTForms' output, we need to map it to a params dict
         which matches the structure that the govuk macros are expecting
         """
-        params = {
+        params: Dict[str, Any] = {
             "id": kwargs["id"],
             "name": field.name,
             "label": {"text": field.label.text},
@@ -68,15 +73,15 @@ class GovFormBase(object):
 
         return params
 
-    def merge_params(self, a, b):
+    def merge_params(self, a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
         return merger.merge(a, b)
 
-    def render(self, params):
+    def render(self, params: Dict[str, Any]) -> Markup:
         return Markup(render_template(self.template, params=params))
 
 
 class GovIterableBase(GovFormBase):
-    def __call__(self, field, **kwargs):
+    def __call__(self, field: Field, **kwargs: Any) -> Markup:
         kwargs.setdefault("id", field.id)
 
         if "required" not in kwargs and "required" in getattr(field, "flags", []):
@@ -86,7 +91,10 @@ class GovIterableBase(GovFormBase):
 
         # This field is constructed as an iterable of subfields
         for subfield in field:
-            item = {"text": subfield.label.text, "value": subfield._value()}
+            item: Dict[str, Any] = {
+                "text": subfield.label.text,
+                "value": subfield._value(),
+            }
 
             if getattr(subfield, "checked", subfield.data):
                 item["checked"] = True
@@ -95,7 +103,7 @@ class GovIterableBase(GovFormBase):
 
         return super().__call__(field, **kwargs)
 
-    def map_gov_params(self, field, **kwargs):
+    def map_gov_params(self, field: Field, **kwargs: Any) -> Dict[str, Any]:
         """Completely override the params mapping for this input type
 
         It bears little resemblance to that of a normal field
@@ -103,7 +111,7 @@ class GovIterableBase(GovFormBase):
         fields wrapped in an iterable
         """
 
-        params = {
+        params: Dict[str, Any] = {
             "name": field.name,
             "items": kwargs["items"],
             "hint": {"text": field.description},
@@ -114,7 +122,7 @@ class GovIterableBase(GovFormBase):
             # Merge items individually as otherwise the merge will append new ones
             if "items" in kwargs["params"]:
                 for index, item in enumerate(kwargs["params"]["items"]):
-                    item = self.merge_params(params["items"][index], item)
+                    params["items"][index] = self.merge_params(params["items"][index], item)  # Corrected this line
 
                 del kwargs["params"]["items"]
 
